@@ -69,6 +69,78 @@ The terminal will output pass/fail status for individual test cases like:
 
 ---
 
+## Project Structure
+
+```text
+app/src/main/java/com/example/intelligent_messaging_app/
+├── data/
+│   ├── local/
+│   │   ├── dao/
+│   │   │   ├── ConflictDao.kt
+│   │   │   ├── ConversationDao.kt
+│   │   │   ├── MessageDao.kt
+│   │   │   └── OutboxDao.kt
+│   │   ├── entity/
+│   │   │   ├── ConflictEntity.kt
+│   │   │   ├── ConversationEntity.kt
+│   │   │   ├── MessageEntity.kt
+│   │   │   ├── OutboxEntity.kt
+│   │   │   └── SyncStateEntity.kt
+│   │   ├── ChatDatabase.kt
+│   │   └── Converters.kt
+│   └── repository/
+│       ├── MessageRepositoryImpl.kt
+│       └── UserPreferencesRepository.kt
+├── di/
+│   ├── DatabaseModule.kt
+│   └── RepositoryModule.kt
+├── domain/
+│   └── model/
+│       └── MessageStatus.kt
+├── sync/
+│   └── SyncWorker.kt
+├── ui/
+│   ├── chat/
+│   │   ├── ChatScreen.kt
+│   │   └── ChatViewModel.kt
+│   └── login/
+│       ├── LoginScreen.kt
+│       └── LoginViewModel.kt
+├── util/
+│   └── NetworkMonitor.kt
+├── MainActivity.kt
+└── MessagingApp.kt
+```
+
+### File Descriptions
+
+- **`ConflictDao.kt`**: Data access for message conflict resolution.
+- **`ConversationDao.kt`**: Data access for chat conversation metadata.
+- **`MessageDao.kt`**: Data access for local message persistence.
+- **`OutboxDao.kt`**: Data access for the outgoing message queue.
+- **`ConflictEntity.kt`**: Room entity representing a message conflict.
+- **`ConversationEntity.kt`**: Room entity for conversation details.
+- **`MessageEntity.kt`**: Room entity for chat messages.
+- **`OutboxEntity.kt`**: Room entity for messages waiting to sync.
+- **`SyncStateEntity.kt`**: Room entity for tracking global sync status.
+- **`ChatDatabase.kt`**: Main Room database configuration.
+- **`Converters.kt`**: Room type converters for non-primitive types.
+- **`MessageRepositoryImpl.kt`**: Repository implementation orchestrating data between local and remote.
+- **`UserPreferencesRepository.kt`**: Manages user session and preferences using DataStore.
+- **`DatabaseModule.kt`**: Hilt module for providing database-related dependencies.
+- **`RepositoryModule.kt`**: Hilt module for providing repository implementations.
+- **`MessageStatus.kt`**: Domain enum for the lifecycle of a message.
+- **`SyncWorker.kt`**: WorkManager implementation for background message synchronization.
+- **`ChatScreen.kt`**: Jetpack Compose UI for the chat interface.
+- **`ChatViewModel.kt`**: ViewModel handling chat screen state and actions.
+- **`LoginScreen.kt`**: Jetpack Compose UI for the login screen with video background.
+- **`LoginViewModel.kt`**: ViewModel for handling user login and session.
+- **`NetworkMonitor.kt`**: Utility to monitor and report network connectivity status.
+- **`MainActivity.kt`**: Main activity hosting the application's navigation.
+- **`MessagingApp.kt`**: Application class for Hilt and WorkManager initialization.
+
+---
+
 ## License
 
 This project is developed for demonstration of production-grade Android engineering principles.
