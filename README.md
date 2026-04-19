@@ -27,8 +27,6 @@ The LLD focuses on the specific implementation of the Sync Worker and the Confli
 
 ![Low-Level Design](docs/Messaging-android-app-LLD.png)
 
-> For a deep dive into the implementation details, phases, and edge case handling, see [implementation_details.md](docs/implementation_details.md).
-
 ---
 
 ## Tech Stack

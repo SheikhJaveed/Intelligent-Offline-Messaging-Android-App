@@ -33,6 +33,7 @@ Implemented the local persistence layer. Every message sent is first written to 
 ---
 
 ## Phase 2: Background Sync Engine (Part B)
+
 **Description:**
 Developed the sync mechanism using WorkManager. This ensures that messages queued while offline are sent as soon as the device gains connectivity, even if the app is closed or the device is rebooted.
 
@@ -43,13 +44,174 @@ Developed the sync mechanism using WorkManager. This ensures that messages queue
 
 ---
 
+### Example: What happens if the network fails while sending?
+
+1. **Detection:**  
+   The SyncWorker (via WorkManager) attempts to send the message. If the network is lost or the server returns a 5xx error, the worker catches this exception.
+
+2. **Retry Signal:**  
+   Instead of marking the message as permanently "Failed," the worker returns:  
+   `ListenableWorker.Result.retry()`
+
+3. **Exponential Backoff:**  
+   WorkManager calculates a delay before retrying:
+    - 1st Failure → 30 seconds
+    - 2nd Failure → 60 seconds
+    - 3rd Failure → 120 seconds
+
+4. **OS Optimization:**  
+   During this wait, the app doesn’t need to be open. Android OS schedules the retry and only wakes the app when:
+    - Network becomes available
+    - Backoff delay has passed
+
+   This avoids server overload and saves battery.
+
+---
+
+### Does it fail permanently or keep trying?
+
+- By default, **WorkManager keeps retrying** until:
+    - Constraints are met, OR
+    - Work is explicitly cancelled
+
+- In this implementation:
+
+    - **OS-Aware Behavior:**  
+      If the network is unavailable (e.g., 10 hours), WorkManager does NOT repeatedly fail.  
+      It simply waits until the `CONNECTED` constraint is satisfied.
+
+    - **Backoff Policy:**  
+      Uses `BackoffPolicy.EXPONENTIAL`, so retry intervals increase (30s → 60s → 120s → ...), up to a cap (~5 hours).
+
+    - **Permanent Failure Handling:**
+        - Transient error (e.g., timeout) → `Result.retry()`
+        - Permanent error (e.g., user banned) → `Result.failure()`
+
+👉 **Result:**  
+The system doesn’t fail permanently due to time — it becomes progressively less aggressive, conserving battery and network usage while still guaranteeing delivery.
+
+---
+
 ## Phase 3: Conflict Resolution Logic (Part C)
+
 **Description:**
 Implemented conflict detection using versioning and timestamps. If the server rejects a message due to a version mismatch (simulated), the app identifies a conflict and triggers a resolution flow.
 
 **Concepts of Android App Development Involved:**
 - **Data Versioning:** Using Long timestamps to track message lineage.
 - **Conflict Entities:** Storing remote vs local versions in a temporary table for user review.
+
+---
+
+###  Real-Life Example: The "Lost Acknowledgement" (Double Send)
+
+Imagine you are in a subway with unstable network.
+
+#### 1. The Conflict Event
+
+1. **Client (Your Phone):**
+    - You send: `"See you at 5!"`
+    - Stored locally as `PENDING`
+    - Assigned `clientMessageId = msg_123`
+    - SyncWorker starts
+
+2. **Server:**
+    - Receives `msg_123`
+    - Saves it
+    - Sends success response
+
+3. **Network Failure:**
+    - Response never reaches your phone
+
+4. **Client (SyncWorker):**
+    - Assumes failure
+    - Schedules retry
+
+---
+
+#### 2. The Disagreement (Next Sync)
+
+5. **Client:**
+    - Retries sending `msg_123`
+
+6. **Server:**
+    - Detects duplicate message
+
+   **Conflict:**
+    - Server version → `DELIVERED`
+    - Client version → `PENDING`
+
+   **Response:**
+    - Returns `409 Conflict`
+    - Sends server version data
+
+---
+
+#### 3. Client-Side Resolution (UI Flow)
+
+7. **SyncWorker:**
+    - Receives conflict
+    - Inserts entry into `ConflictEntity`
+
+8. **UI (ChatScreen):**
+    - ChatViewModel detects conflict
+    - Shows dialog:
+
+Sync Conflict
+
+Local: "See you at 5!" (Pending)
+Server: "See you at 5!" (Delivered)
+
+[Keep Mine] [Use Server's]
+
+
+---
+
+#### 4. Final Resolution Paths
+
+| Choice          | Client-Side Logic                                                                 | Server-Side Logic                                      |
+|----------------|----------------------------------------------------------------------------------|--------------------------------------------------------|
+| Use Server's   | Update local message → `DELIVERED`, remove from Outbox                           | No action needed                                       |
+| Keep Mine      | Increment version (v1 → v2), resend message                                      | Server overwrites old version with new one              |
+
+---
+
+### 🧠 Why this is Production-Grade
+
+- **Server = Validator**  
+  Prevents stale data from overwriting valid state (e.g., read receipts)
+
+- **Client = Mediator**  
+  Instead of silent failure, user is involved in resolving truth
+
+---
+
+### Testing the Conflict (Simulation Mode)
+
+Since a real backend is required for true conflicts, a simulation is implemented.
+
+#### How to Test:
+
+1. Open the app → Chat Screen
+2. Type: `conflict`
+3. Press Send
+
+#### What Happens:
+
+1. Message appears with ⏳ (Pending)
+2. SyncWorker starts
+3. Keyword trigger:
+   ```kotlin
+   if (message.content.contains("conflict"));
+   ```
+4. Fake server conflict is inserted
+5. UI detects conflict
+6. Conflict dialog appears
+
+To test real-world conflicts:
+
+A backend with version validation is required
+Current setup simulates conflicts for demonstration purposes
 
 ---
 
