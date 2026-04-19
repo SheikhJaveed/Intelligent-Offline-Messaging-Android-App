@@ -225,6 +225,102 @@ Built a memory-efficient UI using Jetpack Compose. This included skeleton loader
 - **Shimmering/Skeleton Loaders:** Custom animations using `animateFloat` and `Brush.linearGradient`.
 - **LazyColumn Optimizations:** Using `keys` and `contentType` for smooth scrolling and minimal recomposition.
 
+## Jetpack Compose UI
+
+Jetpack Compose UI (from Jetpack Compose) is a modern way to build Android app screens using code instead of XML layouts.
+
+### What it is (Simple Idea)
+
+Think of it like writing UI as functions.
+
+Instead of:
+- Designing layouts in XML
+- Then linking them to code
+
+You directly describe your UI using Kotlin functions, making it more intuitive, faster to iterate, and easier to maintain.
+
+---
+
+## UI Performance & UX Enhancements
+
+### 1. Why these libraries and where are they used?
+
+#### Shimmering / Skeleton Loaders
+
+- **Where:** `ChatScreen.kt` (see `SkeletonMessageItem` at line 280)
+
+- **Advantage:**  
+  Improves perceived performance. Instead of showing a blank screen while data loads, the user sees a placeholder resembling actual content.
+
+- **Technical Implementation:**
+    - Uses `rememberInfiniteTransition`
+    - Uses `animateFloat` to animate alpha (0.3 → 0.7)
+    - Lightweight approach (no GIFs or Lottie)
+    - Efficient because it redraws a simple composable with changing transparency
+
+---
+
+#### LazyColumn Optimizations (Keys & ContentType)
+
+- **Where:** `ChatScreen.kt` (inside `LazyColumn`)
+
+- **Advantage:**  
+  Prevents laggy scrolling and improves rendering efficiency.
+
+- **How it works:**
+
+    - `key = { it.clientMessageId }`
+        - Gives each item a stable identity
+        - Prevents full list recomposition
+        - Only updates changed items
+
+    - `contentType = { it.status }`
+        - Helps reuse layout templates
+        - Reduces CPU work during fast scrolling
+        - Groups similar UI structures together
+
+---
+
+## Seamless Video Playback (Zero Placeholder Delay)
+
+### What is "Placeholder Delay"?
+
+In many apps, when opening a screen with a video, a white or gray flash appears before playback starts. This is called placeholder delay.
+
+---
+
+### How Zero Delay is Achieved
+
+1. **Immediate Preparation**
+    - In `LoginScreen.kt` (lines 100–112)
+    - `exoPlayer.prepare()` and `playWhenReady = true` inside `remember`
+    - Starts loading instantly when the screen initializes
+
+2. **Zoom Fill Mode**
+    - `RESIZE_MODE_ZOOM`
+    - Avoids black bars and layout shifts
+
+3. **Background Color Matching**
+    - `setBackgroundColor(Color.BLACK)`
+    - Matches the video tone and hides any minor delay
+
+4. **Local Resource Usage**
+    - `raw/login_video_animation`
+    - No network latency, enabling instant playback
+
+Result: Visually seamless transition with no flicker or delay.
+
+
+## Summary
+
+This architecture combines:
+- Declarative UI with Jetpack Compose
+- Smooth UX via skeleton loaders and optimized lists
+- Seamless media playback without visual artifacts
+- Reliable and fast testing for asynchronous operations
+
+Result: A high-performance, production-grade Android app experience.
+
 ---
 
 ## Phase 5: Verification & Testing
@@ -234,6 +330,42 @@ Added unit tests to verify the repository logic, outbox insertion, and conflict 
 **Concepts of Android App Development Involved:**
 - **JUnit 4 & MockK:** For business logic verification.
 - **Kotlinx-Coroutines-Test:** For testing asynchronous `Flow` and `suspend` functions.
+
+## Testing Strategy (Robust & Scalable)
+
+### Why These Tools?
+
+#### JUnit 4
+- Industry-standard testing framework for Android
+- Stable and well-integrated with Android Studio
+- Supports fast local unit testing
+
+---
+
+#### MockK
+- Kotlin-first mocking library
+- Handles:
+    - `suspend` functions
+    - Coroutines
+    - Static objects
+
+Better suited than older tools like Mockito for modern Kotlin apps.
+
+---
+
+#### Kotlinx Coroutines Test
+
+- Designed for testing asynchronous logic
+
+- Provides:
+    - `runTest`
+    - `TestScope`
+
+- Key Advantage:  
+  Allows virtual time control
+
+  Example:  
+  A 5-second delay in production can be tested in milliseconds by fast-forwarding time.
 
 ---
 
@@ -279,6 +411,7 @@ A common issue in chat apps is a "sticky" offline banner that stays even after t
 | **Retrofit / Serialization** | Networking; handles the JSON data flow between the app and server. |
 | **MockK** | Testing; used to mock DAOs and WorkManager for unit verification. |
 | **Coroutines-Test** | Asynchronous testing; ensures Flows and Suspend functions behave as expected. |
+
 
 ---
 *End of Documentation*
