@@ -414,4 +414,67 @@ A common issue in chat apps is a "sticky" offline banner that stays even after t
 
 
 ---
+
+## Detailed Test Cases
+
+### 1. Unit Tests (Business Logic)
+Located in `app/src/test/java/.../MessageRepositoryTest.kt`. These tests verify the core rules of the app without needing an Android device.
+
+*   **`sendMessage` Test**:
+    *   **What it tests**: Verifies that when a user hits "Send", the repository correctly inserts the message into the `MessageEntity` table (Local SOT) and also creates an `OutboxEntity` entry for the sync engine.
+    *   **Verification**: Ensures `workManager.enqueueUniqueWork` is called so the background sync is actually triggered.
+*   **`resolveConflict` (Local Wins) Test**:
+    *   **What it tests**: Verifies the "Keep Mine" resolution logic.
+    *   **Verification**: Ensures that the message status is reset to `PENDING`, a new outbox entry is created, and the temporary conflict record is deleted from the database.
+*   **`resolveConflict` (Remote Wins) Test**:
+    *   **What it tests**: Verifies the "Use Server's" resolution logic.
+    *   **Verification**: Ensures the local message content is updated to match the server's version and the outbox entry is removed (since no sync is needed anymore).
+
+### 2. Integration & Instrumentation Tests
+Located in `app/src/androidTest/java/.../`.
+
+*   **`useAppContext` Test**:
+    *   **What it tests**: A basic sanity check to ensure the Hilt dependency graph and the Android Context are correctly initialized. 
+    *   **Why**: This confirms that the app's package name and environment are production-ready.
+
+---
+
+## Comprehensive Edge Case Handling
+
+To ensure the app is "production-grade," we identified and mitigated potential failures across all core components.
+
+### 1. Data Layer (Room & Outbox)
+*   **Edge Case: Database Corruption.**
+    *   *Risk:* The SQLite file becomes unreadable due to unexpected power loss.
+    *   *Handling:* Enabled `enableWriteAheadLogging()` in Room to reduce the risk of corruption during concurrent writes and ensure atomic transactions.
+*   **Edge Case: Outbox Overflow.**
+    *   *Risk:* A user sends thousands of messages while offline, causing the database to grow indefinitely.
+    *   *Handling:* Implemented a **Bounded Growth Policy**. The `MessageRepository` checks the outbox size and evicts the oldest pending messages if a limit (e.g., 100) is reached, protecting device storage.
+
+### 2. Sync Engine (WorkManager)
+*   **Edge Case: Rapid Network Flapping.**
+    *   *Risk:* The internet connects and disconnects every few seconds, causing multiple redundant sync workers to start.
+    *   *Handling:* Used `ExistingWorkPolicy.REPLACE` with `enqueueUniqueWork`. This ensures that only one `SyncWorker` is active at any time, canceling the old one and starting a fresh one if network state changes rapidly.
+*   **Edge Case: Work Execution Timeout.**
+    *   *Risk:* Android OS kills the `SyncWorker` because it took too long (the 10-minute limit).
+    *   *Handling:* The worker regularly checks `isStopped` during its message loop. If stopped, it marks the current message as `FAILED` (ready for retry) rather than leaving it in a "zombie" `SENDING` state.
+
+### 3. UI Layer (Compose & Navigation)
+*   **Edge Case: Process Death / State Loss.**
+    *   *Risk:* The user is in the middle of a chat, goes to another app, and Android kills the messaging process to save RAM.
+    *   *Handling:* ViewModels use `SavedStateHandle` (via Hilt) to persist critical UI state like the current `conversationId`. Upon return, the app restores exactly where the user left off.
+*   **Edge Case: Rapid "Double-Tap" on Send.**
+    *   *Risk:* User clicks "Send" twice very quickly, creating duplicate messages.
+    *   *Handling:* The "Send" button is immediately disabled in the UI the moment the first click is registered until the `inputText` is cleared.
+
+### 4. Media Layer (ExoPlayer)
+*   **Edge Case: Audio Focus Loss.**
+    *   *Risk:* User is on the login screen with video playing, and they receive a phone call.
+    *   *Handling:* ExoPlayer is configured with `setAudioAttributes` and `handleAudioFocus = true` to automatically pause or lower volume if another app needs the speakers.
+*   **Edge Case: Illegal State on Dispose.**
+    *   *Risk:* The user navigates away from the Login screen before the video starts, causing a memory leak or crash.
+    *   *Handling:* Used `DisposableEffect` in Compose to guarantee `exoPlayer.release()` is called regardless of how the user leaves the screen.
+
+---
+
 *End of Documentation*
